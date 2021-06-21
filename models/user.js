@@ -1,5 +1,7 @@
 const connection = require('../db-config');
 const Joi = require('joi');
+const argon2 = require('argon2');
+
 
 const db = connection.promise();
 
@@ -43,10 +45,21 @@ const findByEmailWithDifferentId = (email, id) => {
     .then(([results]) => results[0]);
 };
 
-const create = (data) => {
-  return db.query('INSERT INTO users SET ?', data).then(([result]) => {
-    const id = result.insertId;
-    return { ...data, id };
+const createWithHashPassword = ({ firstname, lastname, city, language, email, password }) => {
+  return hashPassword(password).then((hashedPassword) => {
+    return db
+      .query('INSERT INTO users SET ?', {
+        firstname,
+        lastname,
+        city,
+        language,
+        email,
+        hashedPassword,
+      })
+      .then(([result]) => {
+        const id = result.insertId;
+        return { firstname, lastname, city, language, email, id };
+      });
   });
 };
 
@@ -60,6 +73,21 @@ const destroy = (id) => {
     .then(([result]) => result.affectedRows !== 0);
 };
 
+const hashingOptions = {
+  type: argon2.argon2id,
+  memoryCost: 2 ** 16,
+  timeCost: 5,
+  parallelism: 1
+};
+
+const hashPassword = (plainPassword) => {
+  return argon2.hash(plainPassword, hashingOptions);
+};
+
+const verifyPassword = (plainPassword, hashedPassword) => {
+  return argon2.verify(hashedPassword, plainPassword, hashingOptions);
+};
+
 module.exports = {
   findMany,
   findOne,
@@ -69,4 +97,7 @@ module.exports = {
   destroy,
   findByEmail,
   findByEmailWithDifferentId,
+  hashPassword,
+  verifyPassword,
+  createWithHashPassword,
 };
